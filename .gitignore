@@ -1,0 +1,40 @@
+
+.env.local
+
+# Node/Expo
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.expo/
+.expo-shared/
+dist/
+
+# Lockfiles (keep one if you prefer consistency; remove others)
+package-lock.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# TypeScript
+*.tsbuildinfo
+
+# Drizzle
+drizzle/meta/*
+
+# Convex generated
+convex/_generated/
+
+# Android/iOS build artifacts
+android/app/build/
+ios/build/
+ios/Pods/
+
+# IDE
+.idea/
+.vscode/
+
+# SQLite databases (optional: uncomment to ignore local DB)
+# app.db
+# app.v*.db
