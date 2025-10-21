@@ -27,24 +27,7 @@ export default function App() {
         // Ensure backend user exists
         try { await convex.mutation(api.auth.ensureUser, {}); } catch {}
         let rows = await db.select().from(conversationsLocal).orderBy(desc(conversationsLocal.updatedAt));
-        // First-run bootstrap: if no local conversations, create one on the server and store its real id locally
-        if (rows.length === 0) {
-          try {
-            const seeded = await convex.mutation(api.dev.seedCreateGroup, { title: 'Demo Chat' });
-            const nowTs = Date.now();
-            await db.insert(conversationsLocal).values({
-              id: seeded.conversationId,
-              kind: 'group',
-              title: 'Demo Chat',
-              createdBy: 'seed-user',
-              createdAt: nowTs,
-              updatedAt: nowTs,
-              muted: 0,
-              archived: 0,
-            });
-            rows = await db.select().from(conversationsLocal).orderBy(desc(conversationsLocal.updatedAt));
-          } catch {}
-        }
+        // Optional: if you want automatic bootstrap, place it behind a feature flag.
         if (!mounted) return;
         setConversations(rows.map((r) => ({ id: r.id, title: r.title ?? 'Direct chat', lastMessage: '', unread: 0 })));
       } finally {
