@@ -78,6 +78,28 @@ export const createGroup = mutation({
   },
 });
 
+export const listUpdatedSince = query({
+  args: { since: v.number() },
+  handler: async (ctx: any, args: any) => {
+    const me = await requireViewer(ctx);
+    // Find my conversation ids
+    const memberships = await ctx.db
+      .query("conversationMembers")
+      .withIndex("byUser", (q: any) => q.eq("userId", me._id))
+      .collect();
+    const convoIds = new Set(memberships.map((m: any) => m.conversationId));
+    const results: any[] = [];
+    // Iterate my conversations; fetch and filter by updatedAt > since
+    for (const id of convoIds) {
+      const c = await ctx.db.get(id);
+      if (c && c.updatedAt > args.since) results.push(c);
+    }
+    // Sort by updatedAt desc
+    results.sort((a, b) => b.updatedAt - a.updatedAt);
+    return results;
+  },
+});
+
 export const addMember = mutation({
   args: { conversationId: v.id("conversations"), userId: v.id("users") },
   handler: async (ctx: any, args: any) => {

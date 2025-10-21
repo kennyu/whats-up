@@ -16,7 +16,18 @@ export async function sendTextLocal(conversationId: string, text: string, userId
     status: 'pending',
     createdAt,
   });
-  await enqueue('message', { conversationId, text, clientId });
+  // If conversation not reconciled yet, link this message to its parent conversation create via parentClientId
+  if (typeof conversationId === 'string' && conversationId.startsWith('temp-')) {
+    await db.insert(outbox).values({
+      clientId,
+      kind: 'message',
+      payload: JSON.stringify({ conversationId, text, clientId }),
+      createdAt,
+      parentClientId: conversationId,
+    });
+  } else {
+    await enqueue('message', { conversationId, text, clientId });
+  }
 }
 
 

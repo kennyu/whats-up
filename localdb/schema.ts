@@ -133,12 +133,13 @@ export const outbox = sqliteTable(
   "outbox",
   {
     clientId: text("client_id").primaryKey(), // local UUID
-    kind: text("kind").notNull(), // "message" | "reaction" | "receipt" | "attachment"
+    kind: text("kind").notNull(), // "message" | "reaction" | "receipt" | "attachment" | "conversation"
     payload: text("payload").notNull(), // JSON string
     createdAt: integer("created_at", { mode: "number" }).notNull(),
     attemptCount: integer("attempt_count", { mode: "number" }).default(0),
     lastAttemptAt: integer("last_attempt_at", { mode: "number" }),
     error: text("error"),
+    parentClientId: text("parent_client_id"), // for dependency ordering (children wait on parent)
   },
   (table) => ({
     byCreatedAt: index("outbox_by_created_at").on(table.createdAt),

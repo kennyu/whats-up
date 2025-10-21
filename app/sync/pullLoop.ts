@@ -42,4 +42,32 @@ export async function pullConversation(client: ConvexReactClient, conversationId
     .onConflictDoUpdate({ target: syncState.key, set: { lastCursor: String(latest), lastSyncedAt: Date.now() } });
 }
 
+export async function pullConversations(client: ConvexReactClient) {
+  const key = `conversations:list`;
+  const existing = await db.select().from(syncState).where(eq(syncState.key, key));
+  const since = existing.length ? Number(existing[0].lastCursor ?? 0) : 0;
+  const rows = await client.query(api.conversations.listUpdatedSince, { since });
+  if (!rows.length) return;
+  for (const c of rows) {
+    await db
+      .insert(conversationsLocal)
+      .values({
+        id: c._id,
+        kind: c.kind,
+        title: c.title ?? null,
+        createdBy: c.createdBy,
+        createdAt: c.createdAt,
+        updatedAt: c.updatedAt,
+        muted: 0,
+        archived: 0,
+      } as any)
+      .onConflictDoUpdate({ target: conversationsLocal.id, set: { title: c.title ?? null, updatedAt: c.updatedAt } });
+  }
+  const latest = rows[0].updatedAt; // rows sorted desc
+  await db
+    .insert(syncState)
+    .values({ key, lastCursor: String(latest), lastSyncedAt: Date.now() })
+    .onConflictDoUpdate({ target: syncState.key, set: { lastCursor: String(latest), lastSyncedAt: Date.now() } });
+}
+
 

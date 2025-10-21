@@ -10,8 +10,6 @@ yarn-error.log*
 .expo-shared/
 dist/
 
-# Lockfiles (keep one if you prefer consistency; remove others)
-package-lock.json
 
 # OS
 .DS_Store

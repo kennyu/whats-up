@@ -1,89 +1,54 @@
-<!-- 4dfc576e-0080-4b6a-99dc-e89ff49b3b3e 6bd167da-9b6f-4bd0-adb6-cd57990efeec -->
-# MVP Implementation Plan (Foundation → Features)
+<!-- 4dfc576e-0080-4b6a-99dc-e89ff49b3b3e f8ff3f47-432e-4b09-8666-2540b0dae181 -->
+# New Conversation Flow (1:1 & Group)
 
 ## Goal
 
-Ship the 24-hour MVP from MessageAI.md: 1:1 + groups, real-time delivery, persistence, optimistic UI, presence, timestamps, auth, read receipts, push notifications.
+Enable users to start new 1:1 or group chats from the app, creating conversations on Convex and updating the local SQLite cache so they appear instantly in the list and can be opened.
 
-## 1) Foundation
+## Scope
 
-- Initialize Expo app, TypeScript, Babel/Metro config (done).
-- Install Convex/Drizzle/expo-sqlite (done) and wire basic project scripts.
-- Create `.env` handling and platform config placeholders (FCM/APNs keys later).
+- New entry point (button) from the conversation list to open a “New Conversation” flow
+- 1:1: pick a user (basic mock selector now, real directory later) → createDirect
+- Group: set title, pick multiple users → createGroup
+- On success: insert/update local `conversations_local` and route to the chat
+- Optimistic UI with fallback on error
 
-## 2) Data & Backend
+## UI/UX
 
-- Convex schema (done). Add queries/mutations/actions for conversations, messages, reactions, receipts, typing, notifications.
-- Expo SQLite schema (done). Implement outbox + sync engine (downstream+upstream) with pruning.
-- Auth: use Convex auth (or Clerk/Auth0 later if needed). Minimal email/anonymous for MVP.
+- Add a “+” floating action button on the conversation list
+- Modal sheet: tabs for “New Chat” and “New Group”
+- Minimal participant selector (temporary mock: text input of user handles, comma-separated)
+- Validation: at least 1 participant for 1:1, 2+ for group; title required for group
 
-## 3) App State & Sync
+## Data Flow
 
-- Session bootstrap: login → preload user + conversations list cursors.
-- Sync loop: pull per-conversation since cursor; reconcile; update unread.
-- Outbox worker: retries, backoff, id reconciliation.
+- Call Convex mutations: `conversations.createDirect`, `conversations.createGroup`
+- Receive real `conversationId`
+- Insert into SQLite: `conversations_local` with returned id, title/kind, timestamps set to now
+- Navigate to `ChatScreen` with the new `conversationId`
 
-## 4) Messaging UI (Custom Components)
+## Error Handling
 
-- Conversation list: shows title/avatar, last message preview, unread count, online badge.
-- Chat screen: build with FlatList (inverted), MessageBubble, DateSeparator, Composer, AttachmentButton.
-- Features: send, replyTo (inline quote), reactions bar, image send/render with tap-to-zoom.
-- Optimistic UI: pending → sent → delivered → read (status badges/icons).
-- Timestamps: in bubbles and list items; show "Today/Yesterday" separators.
-- Performance: windowed list, keyExtractor=id, maintainVisibleContentPosition, getItemLayout.
-- Accessibility: roles/labels for bubbles and composer; large text support.
+- Show inline error if Convex call fails
+- Disable submit while pending; allow retry
 
-## 5) Presence & Read State
+## Out of Scope (later)
 
-- Typing indicators: set/expire typingStates; render in chat header.
-- Online/offline presence: lastSeenAt + recent activity heuristic for MVP.
-- Read receipts: per-user per-conversation latest cursor; double-tick style indicator.
+- Real user directory/search
+- Avatars/upload
+- Role management UI
 
-## 6) Groups
+## Acceptance
 
-- Create group: select members, set title, role=admin/member.
-- Membership changes (admin only), system messages for join/leave/rename.
-
-## 7) Media (Images)
-
-- Pick image, create attachment row (local URI), upload via Convex action, replace with URL.
-- Render image bubble with tap-to-zoom.
-
-## 8) Notifications
-
-- Register device token; store in Convex.
-- On new message, server action fans out via Expo Notifications/FCM.
-- Foreground handler for in-app banners; background opens chat.
-
-## 9) Deployment
-
-- Convex: `convex deploy` to prod.
-- Expo: run on real devices (Dev Client), ensure push works on both platforms.
-- Smoke tests per MessageAI MVP scenarios.
-
-## Acceptance Checklist (MVP)
-
-- 1:1 and group chat send/receive in real-time (two devices).
-- Messages persist locally and sync after reconnect.
-- Optimistic send state transitions; crash/relaunch persistence holds.
-- Online/offline indicators and typing.
-- Timestamps visible.
-- Auth exists; user profiles render.
-- Read receipts shown.
-- Push notifications received (fg at least).
+- From list, user can create a 1:1 or group
+- New conversation appears at top of list and opens to chat
+- App restart preserves the new conversation
 
 ### To-dos
 
-- [ ] Implement minimal Convex auth and user bootstrap
-- [ ] Add Convex queries/mutations for conversations/messages
-- [ ] Add reactions toggle and list APIs
-- [ ] Add readReceipts upsert and typing state APIs
-- [ ] Implement SQLite outbox + downstream sync + pruning
-- [ ] Build conversation list with last message and unread count
-- [ ] Build chat screen with send, replyTo, timestamps, optimistic
-- [ ] Add emoji reactions UI and counts
-- [ ] Add image pick/upload/render bubble flow
-- [ ] Show typing and online/offline indicators
-- [ ] Create/join/leave groups and admin operations
-- [ ] Register tokens and fan-out notifications
-- [ ] Run MessageAI MVP scenarios on two devices
+- [ ] Add '+' FAB on conversation list to open new conversation modal
+- [ ] Build modal with tabs: New Chat and New Group
+- [ ] Wire createDirect mutation and insert conversation locally
+- [ ] Wire createGroup mutation and insert conversation locally
+- [ ] Route to ChatScreen on success with new conversationId
+- [ ] Show pending state, surface errors

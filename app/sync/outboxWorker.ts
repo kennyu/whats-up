@@ -28,8 +28,13 @@ export async function flushOutbox(db: any, client: ConvexReactClient) {
       }
       await db.delete(outbox).where(eq(outbox.clientId, row.clientId));
     } catch (err) {
-      // simple backoff can be implemented by keeping attemptCount/lastAttemptAt
-      // leave row for next cycle
+      // Always log errors for visibility; leave row for next cycle / retry.
+      console.error('[outbox] flush error', {
+        kind: (row as any).kind,
+        clientId: (row as any).clientId,
+        payload: (row as any).payload,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 }
