@@ -144,6 +144,38 @@ A modern, real-time messaging application built with React Native and Expo, feat
    npm run ios      # for iOS
    ```
 
+## Authentication (Convex Auth)
+
+This app uses Convex Auth with Google OAuth and Email/Password.
+
+1) Packages (already installed)
+   - `@convex-dev/auth` (server + React bindings)
+   - `expo-secure-store` (secure token storage on device)
+
+2) Convex backend setup
+   - `convex/auth.ts` configures providers:
+     - Google (uses `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET`)
+     - Password (email + password with `flow=signUp|signIn`)
+   - `convex/http.ts` registers public routes used by OAuth and JWKS.
+
+3) Environment variables (Convex deployment)
+   - Set in Convex env (not just local .env):
+     ```bash
+     npx convex env set AUTH_GOOGLE_ID <google-client-id>
+     npx convex env set AUTH_GOOGLE_SECRET <google-client-secret>
+     ```
+   - Ensure `EXPO_PUBLIC_CONVEX_URL` is set in your `.env.local` for the app.
+
+4) Client wiring (already done)
+   - `App.js` wraps the app with `ConvexAuthProvider` and uses `expo-secure-store` for token storage.
+   - Unauthenticated: sign-in screen supports Google and email/password.
+   - Authenticated: loads app and calls `api.auth.ensureUser` to upsert profile.
+
+5) Troubleshooting
+   - If Google OAuth redirects but doesn’t finalize: ensure `convex/http.ts` exists and your Google OAuth redirect URI is `https://<your-convex>.convex.site/api/auth/callback/google`.
+   - If user creation fails on sign-in: schema requires fields. We made app-specific fields optional in `convex/schema.ts` so Convex Auth can create a minimal user.
+   - React/renderer mismatch: align `react` and `react-dom` with your RN renderer version, then clear Metro cache.
+
 ## Project Structure
 
 ```
