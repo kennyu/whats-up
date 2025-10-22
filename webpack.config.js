@@ -13,6 +13,12 @@ module.exports = async function (env, argv) {
   // Ensure .wasm resolves
   config.resolve = config.resolve || {};
   config.resolve.extensions = Array.from(new Set([...(config.resolve.extensions || []), '.wasm']));
+  config.resolve.alias = {
+    ...(config.resolve.alias || {}),
+    // Try both absolute and relative request patterns
+    'expo-sqlite/web/wa-sqlite/wa-sqlite.wasm': require.resolve('expo-sqlite/web/wa-sqlite/wa-sqlite.wasm'),
+    './wa-sqlite/wa-sqlite.wasm': require.resolve('expo-sqlite/web/wa-sqlite/wa-sqlite.wasm'),
+  };
 
   // Ensure .wasm files are emitted correctly
   config.module.rules.push(
