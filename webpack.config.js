@@ -1,4 +1,5 @@
 const createExpoWebpackConfigAsync = require('@expo/webpack-config');
+const webpack = require('webpack');
 
 module.exports = async function (env, argv) {
   const config = await createExpoWebpackConfigAsync(env, argv);
@@ -24,6 +25,21 @@ module.exports = async function (env, argv) {
       test: /\.wasm$/,
       type: 'asset/resource',
     }
+  );
+
+  // Work around relative wasm import path resolution in expo-sqlite's web worker
+  config.plugins = config.plugins || [];
+  config.plugins.push(
+    new webpack.NormalModuleReplacementPlugin(
+      /\.\/wa-sqlite\/wa-sqlite\.wasm$/,
+      (resource) => {
+        try {
+          // Resolve to absolute path so webpack can find it reliably
+          // eslint-disable-next-line global-require
+          resource.request = require.resolve('expo-sqlite/web/wa-sqlite/wa-sqlite.wasm');
+        } catch {}
+      }
+    )
   );
 
   return config;
