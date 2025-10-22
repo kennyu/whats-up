@@ -9,11 +9,22 @@ module.exports = async function (env, argv) {
     asyncWebAssembly: true,
   };
 
+  // Ensure .wasm resolves
+  config.resolve = config.resolve || {};
+  config.resolve.extensions = Array.from(new Set([...(config.resolve.extensions || []), '.wasm']));
+
   // Ensure .wasm files are emitted correctly
-  config.module.rules.push({
-    test: /\.wasm$/,
-    type: 'asset/resource',
-  });
+  config.module.rules.push(
+    {
+      test: /wa-sqlite\.wasm$/,
+      type: 'asset/resource',
+      generator: { filename: 'static/wasm/[name][ext]' },
+    },
+    {
+      test: /\.wasm$/,
+      type: 'asset/resource',
+    }
+  );
 
   return config;
 };
