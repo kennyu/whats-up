@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StatusBar, ActivityIndicator } from 'react-native';
+import { View, Text, StatusBar, ActivityIndicator, TextInput, Button } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { ConversationList } from './app/screens/ConversationList';
 import { ChatScreen } from './app/screens/ChatScreen';
@@ -9,26 +9,35 @@ import { desc, eq } from 'drizzle-orm';
 import { sendTextAndFlush } from './app/actions/chat';
 import { flushOutbox } from './app/sync/outboxWorker';
 import { pullConversation, pullConversations } from './app/sync/pullLoop';
-import { ConvexReactClient } from 'convex/react';
+import { ConvexReactClient, Authenticated, Unauthenticated, AuthLoading } from 'convex/react';
+import { ConvexAuthProvider, useAuthActions } from '@convex-dev/auth/react';
+import * as SecureStore from 'expo-secure-store';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import { api } from './convex/_generated/api';
 import { db, dbReady } from './localdb/db';
 
-export default function App() {
+function AuthedApp({ convex }) {
   const [route, setRoute] = useState({ name: 'list', params: {} });
   const [loading, setLoading] = useState(true);
   const [conversations, setConversations] = useState([]);
   const [messages, setMessages] = useState([]);
   const selectedConversationId = route.name === 'chat' ? route.params.conversationId : null;
   const [showNew, setShowNew] = useState(false);
-  const convex = useMemo(() => new ConvexReactClient(process.env.EXPO_PUBLIC_CONVEX_URL), []);
+  const [currentHandle, setCurrentHandle] = useState(null);
+  const { signOut } = useAuthActions();
 
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
         await dbReady; // ensure tables exist before any queries
-        // Ensure backend user exists
+        // Ensure backend user exists after auth
         try { await convex.mutation(api.auth.ensureUser, {}); } catch {}
+        try {
+          const me = await convex.query(api.auth.me, {});
+          if (me) setCurrentHandle(me.handle ?? 'me');
+        } catch {}
         // Pull latest conversations from server into localdb
         try { await pullConversations(convex); } catch {}
         let rows = await db.select().from(conversationsLocal).orderBy(desc(conversationsLocal.updatedAt));
@@ -111,8 +120,7 @@ export default function App() {
 
   const handleSend = async (text) => {
     if (!selectedConversationId) return;
-    // NOTE: replace 'local-user' with authenticated user id once auth is wired
-    await sendTextAndFlush(selectedConversationId, text, 'local-user', convex);
+    await sendTextAndFlush(selectedConversationId, text, currentHandle ?? 'me', convex);
     // Optimistically refresh
     const rows = await db
       .select()
@@ -255,6 +263,9 @@ export default function App() {
       ) : route.name === 'list' ? (
         <View style={{ flex: 1 }}>
           <ConversationList data={conversations} onOpen={handleOpenConversation} />
+          <View style={{ position: 'absolute', left: 16, bottom: 24, alignItems: 'flex-start' }}>
+            <Text onPress={signOut} style={{ backgroundColor: '#eee', color: '#333', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16 }}>Sign out</Text>
+          </View>
           <View style={{ position: 'absolute', right: 16, bottom: 24, alignItems: 'flex-end' }}>
             <Text onPress={handleDumpDb} style={{ backgroundColor: '#eee', color: '#333', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, marginBottom: 8 }}>Dump</Text>
             <Text onPress={handleClearOutbox} style={{ backgroundColor: '#eee', color: '#333', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, marginBottom: 8 }}>Clear Outbox</Text>
@@ -273,6 +284,91 @@ export default function App() {
       )}
       </SafeAreaView>
     </SafeAreaProvider>
+  );
+}
+
+function SignInScreen() {
+  const { signIn } = useAuthActions();
+  const [mode, setMode] = useState('signIn');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const handleGoogle = async () => {
+    try {
+      setBusy(true);
+      const redirectTo = Linking.createURL('/');
+      const res = await signIn('google', { redirectTo });
+      if (res.redirect) {
+        const result = await WebBrowser.openAuthSessionAsync(res.redirect.toString(), redirectTo);
+        if (result.type === 'success' && result.url) {
+          const url = new URL(result.url);
+          const code = url.searchParams.get('code');
+          if (code) {
+            await signIn('google', { code });
+          }
+        }
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handlePassword = async () => {
+    try {
+      setBusy(true);
+      const data = new FormData();
+      data.append('email', email);
+      data.append('password', password);
+      data.append('flow', mode);
+      await signIn('password', data);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <SafeAreaProvider>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#fff', padding: 24 }}>
+        <StatusBar barStyle="dark-content" />
+        <Text style={{ fontSize: 24, fontWeight: '600', marginBottom: 12 }}>Sign {mode === 'signIn' ? 'in' : 'up'}</Text>
+        <Button title={busy ? 'Signing in…' : 'Continue with Google'} onPress={handleGoogle} disabled={busy} />
+        <View style={{ height: 1, backgroundColor: '#eee', marginVertical: 16 }} />
+        <TextInput placeholder="Email" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} style={{ borderWidth: 1, borderColor: '#ddd', padding: 12, borderRadius: 8, marginBottom: 8 }} />
+        <TextInput placeholder="Password" secureTextEntry value={password} onChangeText={setPassword} style={{ borderWidth: 1, borderColor: '#ddd', padding: 12, borderRadius: 8, marginBottom: 8 }} />
+        <Button title={mode === 'signIn' ? 'Sign in' : 'Sign up'} onPress={handlePassword} disabled={busy || !email || !password} />
+        <Text onPress={() => setMode(mode === 'signIn' ? 'signUp' : 'signIn')} style={{ color: '#007AFF', marginTop: 12 }}>
+          {mode === 'signIn' ? 'Need an account? Sign up' : 'Have an account? Sign in'}
+        </Text>
+      </SafeAreaView>
+    </SafeAreaProvider>
+  );
+}
+
+export default function App() {
+  const convex = useMemo(() => new ConvexReactClient(process.env.EXPO_PUBLIC_CONVEX_URL), []);
+  const secureStorage = {
+    getItem: (k) => SecureStore.getItemAsync(k),
+    setItem: (k, v) => SecureStore.setItemAsync(k, v),
+    removeItem: (k) => SecureStore.deleteItemAsync(k),
+  };
+
+  return (
+    <ConvexAuthProvider client={convex} storage={secureStorage}>
+      <AuthLoading>
+        <SafeAreaProvider>
+          <SafeAreaView style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <ActivityIndicator />
+          </SafeAreaView>
+        </SafeAreaProvider>
+      </AuthLoading>
+      <Unauthenticated>
+        <SignInScreen />
+      </Unauthenticated>
+      <Authenticated>
+        <AuthedApp convex={convex} />
+      </Authenticated>
+    </ConvexAuthProvider>
   );
 }
 
