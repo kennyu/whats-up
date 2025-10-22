@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { SafeAreaView, View, Text, StatusBar, ActivityIndicator } from 'react-native';
+import { View, Text, StatusBar, ActivityIndicator } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { ConversationList } from './app/screens/ConversationList';
 import { ChatScreen } from './app/screens/ChatScreen';
 import { NewConversationModal } from './app/screens/NewConversationModal';
-import { conversationsLocal, messagesLocal, outbox, readReceiptsLocal, syncState, attachmentsLocal, reactionsLocal, conversationMembersLocal } from './localdb/schema';
+import { conversationsLocal, messagesLocal, outbox, readReceiptsLocal, syncState, attachmentsLocal, reactionsLocal, conversationMembersLocal, pendingConversationTargets } from './localdb/schema';
 import { desc, eq } from 'drizzle-orm';
-import { sendTextLocal } from './app/actions/chat';
+import { sendTextAndFlush } from './app/actions/chat';
 import { flushOutbox } from './app/sync/outboxWorker';
 import { pullConversation, pullConversations } from './app/sync/pullLoop';
 import { ConvexReactClient } from 'convex/react';
@@ -111,7 +112,7 @@ export default function App() {
   const handleSend = async (text) => {
     if (!selectedConversationId) return;
     // NOTE: replace 'local-user' with authenticated user id once auth is wired
-    await sendTextLocal(selectedConversationId, text, 'local-user');
+    await sendTextAndFlush(selectedConversationId, text, 'local-user', convex);
     // Optimistically refresh
     const rows = await db
       .select()
@@ -197,13 +198,12 @@ export default function App() {
         muted: 0,
         archived: 0,
       });
-      // enqueue creation
-      await db.insert(outbox).values({
-        clientId,
-        kind: 'conversation',
-        payload: JSON.stringify({ type: 'direct', handles, clientId }),
-        createdAt: nowTs,
-      });
+      // record targets locally to allow payload-less outbox processing
+      for (const h of handles) {
+        await db.insert(pendingConversationTargets).values({ conversationId: clientId, handle: h });
+      }
+      // enqueue creation with minimal payload
+      await db.insert(outbox).values({ clientId, kind: 'conversation', payload: '{}', createdAt: nowTs });
       const rows = await db.select().from(conversationsLocal).orderBy(desc(conversationsLocal.updatedAt));
       setConversations(rows.map((r) => ({ id: r.id, title: r.title ?? 'Direct chat', lastMessage: '', unread: 0 })));
       setRoute({ name: 'chat', params: { conversationId: clientId } });
@@ -230,12 +230,10 @@ export default function App() {
         muted: 0,
         archived: 0,
       });
-      await db.insert(outbox).values({
-        clientId,
-        kind: 'conversation',
-        payload: JSON.stringify({ type: 'group', title, handles, clientId }),
-        createdAt: nowTs,
-      });
+      for (const h of handles) {
+        await db.insert(pendingConversationTargets).values({ conversationId: clientId, handle: h });
+      }
+      await db.insert(outbox).values({ clientId, kind: 'conversation', payload: JSON.stringify({ title }), createdAt: nowTs });
       const rows = await db.select().from(conversationsLocal).orderBy(desc(conversationsLocal.updatedAt));
       setConversations(rows.map((r) => ({ id: r.id, title: r.title ?? 'Group', lastMessage: '', unread: 0 })));
       setRoute({ name: 'chat', params: { conversationId: clientId } });
@@ -247,7 +245,8 @@ export default function App() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+    <SafeAreaProvider>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
       <StatusBar barStyle="dark-content" />
       {loading ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -272,7 +271,8 @@ export default function App() {
       ) : (
         <ChatScreen messages={messages} onSend={handleSend} onPickImage={handlePickImage} onBack={() => setRoute({ name: 'list', params: {} })} />
       )}
-    </SafeAreaView>
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 

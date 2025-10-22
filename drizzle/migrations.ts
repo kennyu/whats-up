@@ -125,6 +125,12 @@ export async function applyMigrations(db: SQLiteDB) {
       last_attempt_at INTEGER,
       error TEXT
     );`,
+    // pending_conversation_targets
+    `CREATE TABLE IF NOT EXISTS pending_conversation_targets (
+      conversation_id TEXT NOT NULL,
+      handle TEXT NOT NULL,
+      PRIMARY KEY (conversation_id, handle)
+    );`,
   ];
 
   try {

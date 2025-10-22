@@ -62,10 +62,29 @@ export const sendText = mutation({
         throw new Error("Reply must reference a message in the same conversation");
       }
     }
+    // Idempotency: if clientId provided and seen before, return existing
+    if (args.clientId) {
+      const existing = await ctx.db
+        .query("messages")
+        .withIndex("byClientId", (q: any) => q.eq("clientId", args.clientId))
+        .unique();
+      if (existing) {
+        // bump conversation updatedAt if needed
+        const maybeNow = Date.now();
+        if (existing.createdAt && typeof existing.createdAt === "number") {
+          await ctx.db.patch(args.conversationId, {
+            updatedAt: Math.max(existing.createdAt, maybeNow),
+            lastMessageId: existing._id,
+          });
+        }
+        return { id: existing._id, clientId: args.clientId };
+      }
+    }
     const now = Date.now();
     const id = await ctx.db.insert("messages", {
       conversationId: args.conversationId,
       senderId: me._id,
+      clientId: args.clientId,
       text: args.text,
       type: "text",
       replyToMessageId: args.replyToMessageId,
@@ -97,10 +116,28 @@ export const sendImage = mutation({
         throw new Error("Reply must reference a message in the same conversation");
       }
     }
+    // Idempotency for images too
+    if (args.clientId) {
+      const existing = await ctx.db
+        .query("messages")
+        .withIndex("byClientId", (q: any) => q.eq("clientId", args.clientId))
+        .unique();
+      if (existing) {
+        const maybeNow = Date.now();
+        if (existing.createdAt && typeof existing.createdAt === "number") {
+          await ctx.db.patch(args.conversationId, {
+            updatedAt: Math.max(existing.createdAt, maybeNow),
+            lastMessageId: existing._id,
+          });
+        }
+        return { id: existing._id, clientId: args.clientId };
+      }
+    }
     const now = Date.now();
     const id = await ctx.db.insert("messages", {
       conversationId: args.conversationId,
       senderId: me._id,
+      clientId: args.clientId,
       type: "image",
       replyToMessageId: args.replyToMessageId,
       status: "sent",

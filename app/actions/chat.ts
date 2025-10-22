@@ -2,6 +2,7 @@ import { db } from "../../localdb/db";
 import { messagesLocal, outbox } from "../../localdb/schema";
 import { enqueue } from "../../localdb/sync";
 import { generateClientId } from "../utils/id";
+import { flushOutbox } from "../sync/outboxWorker";
 
 export async function sendTextLocal(conversationId: string, text: string, userId: string) {
   const clientId = generateClientId();
@@ -28,6 +29,12 @@ export async function sendTextLocal(conversationId: string, text: string, userId
   } else {
     await enqueue('message', { conversationId, text, clientId });
   }
+}
+
+export async function sendTextAndFlush(conversationId: string, text: string, userId: string, convexClient: any) {
+  await sendTextLocal(conversationId, text, userId);
+  // Attempt immediate flush; background loop will retry as well
+  try { await flushOutbox(db as any, convexClient); } catch {}
 }
 
 

@@ -34,6 +34,7 @@ export default defineSchema({
   messages: defineTable({
     conversationId: v.id("conversations"),
     senderId: v.id("users"),
+    clientId: v.optional(v.string()),
     text: v.optional(v.string()),
     type: v.union(v.literal("text"), v.literal("image"), v.literal("system")),
     replyToMessageId: v.optional(v.id("messages")),
@@ -60,7 +61,8 @@ export default defineSchema({
     deletedAt: v.optional(v.number()),
   })
     .index("byConversationCreatedAt", ["conversationId", "createdAt"]) 
-    .index("byReplyTo", ["replyToMessageId"]),
+    .index("byReplyTo", ["replyToMessageId"]) 
+    .index("byClientId", ["clientId"]),
 
   attachments: defineTable({
     messageId: v.id("messages"),

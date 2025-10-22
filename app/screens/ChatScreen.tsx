@@ -1,5 +1,6 @@
 import React, { useRef, useMemo, useRef as useRefAlias } from 'react';
 import { View, Text, FlatList, TextInput, Pressable, Image, PanResponder, Dimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type Message = {
   id: string;
@@ -24,6 +25,7 @@ export function ChatScreen({
   onBack?: () => void;
 }) {
   const inputRef = useRef<TextInput>(null);
+  const insets = useSafeAreaInsets();
   const data = useMemo(() => [...messages].sort((a, b) => b.createdAt - a.createdAt), [messages]);
   const panResponder = useMemo(() => {
     const screen = Dimensions.get('window');
@@ -45,6 +47,13 @@ export function ChatScreen({
 
   return (
     <View style={{ flex: 1 }} {...(panResponder ? panResponder.panHandlers : {})}>
+      {onBack ? (
+        <View style={{ height: 48, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderColor: '#eee', paddingHorizontal: 8 }}>
+          <Pressable onPress={onBack} style={{ paddingVertical: 8, paddingHorizontal: 4 }}>
+            <Text style={{ color: '#007AFF', fontSize: 16 }}>‹ Back</Text>
+          </Pressable>
+        </View>
+      ) : null}
       <FlatList
         inverted
         data={data}
@@ -80,6 +89,8 @@ export function ChatScreen({
           <Text style={{ color: '#007AFF' }}>Send</Text>
         </Pressable>
       </View>
+      {/* Bottom safe area spacer for home indicator / gesture bar */}
+      <View style={{ height: insets.bottom }} />
     </View>
   );
 }

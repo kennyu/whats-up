@@ -147,4 +147,17 @@ export const outbox = sqliteTable(
   })
 );
 
+// pending_conversation_targets: temporary mapping of temp conversation → target handles
+export const pendingConversationTargets = sqliteTable(
+  "pending_conversation_targets",
+  {
+    conversationId: text("conversation_id").notNull(), // temp conversation id
+    handle: text("handle").notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.conversationId, table.handle] }),
+    byConversation: index("pct_by_conversation").on(table.conversationId),
+  })
+);
+
 
